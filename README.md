@@ -1,3 +1,3 @@
 # PDF-Analyser
 
-Compare two structured PDF exports and detect new surname + address combinations — all directly in the browser (built for a specific custom workflow, not general-purpose PDF comparison).
+Compare two structured PDFs and detect new surname + address combinations directly in a browser (built for a specific custom workflow, not general-purpose PDF comparison).
