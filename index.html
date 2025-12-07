@@ -63,7 +63,6 @@
       color: white;
     }
 
-    /* Box for new names */
     #addedNamesBox {
       display: none;
       max-width: 400px;
@@ -122,26 +121,21 @@
     <img src="icon.png" class="title-icon" alt="">
   </h1>
 
-  <!-- Hidden inputs -->
   <input type="file" id="list1" accept="application/pdf">
   <input type="file" id="list2" accept="application/pdf">
 
-  <!-- File buttons -->
   <div class="file-row">
     <button type="button" id="list1Btn" class="file-btn">Vybrat PDF 1</button>
     <button type="button" id="list2Btn" class="file-btn">Vybrat PDF 2</button>
   </div>
 
-  <!-- Action buttons -->
   <div class="actions-row">
     <button id="mergeBtn">Analýza</button>
     <button id="resetBtn">Sloučit</button>
   </div>
 
-  <!-- Box that shows the new surname + address combos -->
   <div id="addedNamesBox"></div>
 
-  <!-- pdf.js (for reading PDFs) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <script>
@@ -150,7 +144,6 @@
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
 
-    // ---------- PDF TEXT EXTRACTION ----------
 
     async function extractTextFromPDF(file) {
       const arrayBuffer = await file.arrayBuffer();
@@ -176,7 +169,6 @@
       return fullText;
     }
 
-    // ---------- HELPERS ----------
 
     function makeKey(surname, addressStart) {
       const s = (surname || '').toLowerCase().replace(/\s+/g, '');
@@ -184,7 +176,6 @@
       return s + '|' + a;
     }
 
-    // e.g. "Olomoucká 164 a, Brno" -> "Olomoucká 164"
     function extractAddressStart(fullAddress) {
       if (!fullAddress) return '';
 
@@ -193,7 +184,7 @@
 
       let numIndex = -1;
       for (let i = 0; i < parts.length; i++) {
-        if (/^\d+$/.test(parts[i])) { // first pure number
+        if (/^\d+$/.test(parts[i])) {
           numIndex = i;
           break;
         }
@@ -206,7 +197,6 @@
       return parts.slice(0, numIndex + 1).join(' ');
     }
 
-    // escape for putting values safely into HTML
     function escapeHtml(str) {
       return String(str)
         .replace(/&/g, '&amp;')
@@ -216,7 +206,6 @@
         .replace(/'/g, '&#39;');
     }
 
-    // ---------- PARSE LIST 1 (ZEBRA TABLE) ----------
 
     function parseZebraTable(text) {
       const lines = text
@@ -247,7 +236,6 @@
       return rows;
     }
 
-    // List 1: {name (surname), address, floor, note}
     function parseZebraLine(line) {
       const tokens = line.trim().split(/\s+/);
       if (!tokens.length) {
@@ -283,7 +271,6 @@
       return { name: surname, address, floor, note };
     }
 
-    // ---------- PARSE LIST 2: FIND NEW SURNAME+ADDRESS COMBOS ----------
 
     function getNewRowsFromList2(text, existingKeySet) {
       const lines = text
@@ -303,12 +290,10 @@
         if (!line.includes(' ')) break;
 
         const tokens = line.split(/\s+/);
-        // 0: surname, 1: firstname, 2: osobní, 3: chod, 4: počet, 5: skupina, 6+: address
         if (tokens.length < 7) break;
 
         const surname = tokens[0];
 
-        // strip tokens with parentheses from address (e.g. "(1)Zelená")
         const rawAddressTokens = tokens.slice(6);
         const addressTokens = rawAddressTokens.filter(t => !/[()]/.test(t));
         const addressFull = addressTokens.join(' ');
@@ -327,7 +312,6 @@
       return rows;
     }
 
-    // ---------- DOM & STATE ----------
 
     const list1Input = document.getElementById('list1');
     const list2Input = document.getElementById('list2');
@@ -337,7 +321,7 @@
     const resetBtn = document.getElementById('resetBtn');
     const addedNamesBox = document.getElementById('addedNamesBox');
 
-    let addedRows = []; // {name, address}
+    let addedRows = [];
 
     list1Btn.addEventListener('click', () => list1Input.click());
     list2Btn.addEventListener('click', () => list2Input.click());
@@ -349,7 +333,6 @@
       list2Btn.textContent = list2Input.files?.[0]?.name || "Vybrat PDF 2";
     });
 
-    // ---------- MERGE ----------
 
     mergeBtn.addEventListener('click', async () => {
       const file1 = list1Input.files[0];
@@ -400,7 +383,6 @@
       }
     });
 
-    // ---------- RESET ----------
 
     resetBtn.addEventListener('click', () => {
       list1Input.value = "";
