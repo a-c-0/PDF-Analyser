@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Petr's App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      text-align: center;
+    }
+
+    .title {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .title-icon {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .file-row,
+    .actions-row {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    button {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .file-btn {
+      background: #e9ecef;
+      border: 1px solid #ccc;
+    }
+
+    #mergeBtn {
+      background: #007bff;
+      color: white;
+    }
+
+    #resetBtn {
+      background: #6c757d;
+      color: white;
+    }
+
+    /* Box for new names */
+    #addedNamesBox {
+      display: none;
+      max-width: 400px;
+      margin: 0 auto 1.5rem auto;
+      text-align: left;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      overflow-x: auto;
+    }
+
+    #addedNamesBox table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    #addedNamesBox th,
+    #addedNamesBox td {
+      padding: 4px 6px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    #addedNamesBox th {
+      font-weight: 600;
+    }
+
+    #addedNamesBox caption {
+      caption-side: top;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      text-align: left;
+    }
+  </style>
+
+    <link rel="manifest" href="manifest.webmanifest">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Petr's App">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js');
+      }
+    </script>
+
+</head>
+
+<body>
+  <h1 class="title">
+    Petr's App
+    <img src="icon.png" class="title-icon" alt="">
+  </h1>
+
+  <!-- Hidden inputs -->
+  <input type="file" id="list1" accept="application/pdf">
+  <input type="file" id="list2" accept="application/pdf">
+
+  <!-- File buttons -->
+  <div class="file-row">
+    <button type="button" id="list1Btn" class="file-btn">Vybrat PDF 1</button>
+    <button type="button" id="list2Btn" class="file-btn">Vybrat PDF 2</button>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="actions-row">
+    <button id="mergeBtn">Analýza</button>
+    <button id="resetBtn">Sloučit</button>
+  </div>
+
+  <!-- Box that shows the new surname + address combos -->
+  <div id="addedNamesBox"></div>
+
+  <!-- pdf.js (for reading PDFs) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <script>
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    // ---------- PDF TEXT EXTRACTION ----------
+
+    async function extractTextFromPDF(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+
+        let line = '';
+        for (const item of textContent.items) {
+          line += item.str;
+          if (item.hasEOL) {
+            fullText += line + '\n';
+            line = '';
+          } else {
+            line += ' ';
+          }
+        }
+        if (line.trim().length > 0) fullText += line + '\n';
+      }
+      return fullText;
+    }
+
+    // ---------- HELPERS ----------
+
+    function makeKey(surname, addressStart) {
+      const s = (surname || '').toLowerCase().replace(/\s+/g, '');
+      const a = (addressStart || '').toLowerCase().replace(/\s+/g, '');
+      return s + '|' + a;
+    }
+
+    // e.g. "Olomoucká 164 a, Brno" -> "Olomoucká 164"
+    function extractAddressStart(fullAddress) {
+      if (!fullAddress) return '';
+
+      const firstPart = fullAddress.split(',')[0];
+      const parts = firstPart.trim().split(/\s+/);
+
+      let numIndex = -1;
+      for (let i = 0; i < parts.length; i++) {
+        if (/^\d+$/.test(parts[i])) { // first pure number
+          numIndex = i;
+          break;
+        }
+      }
+
+      if (numIndex === -1) {
+        return firstPart.trim();
+      }
+
+      return parts.slice(0, numIndex + 1).join(' ');
+    }
+
+    // escape for putting values safely into HTML
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ---------- PARSE LIST 1 (ZEBRA TABLE) ----------
+
+    function parseZebraTable(text) {
+      const lines = text
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length);
+
+      const zebraIndex = lines.findIndex(l => l.toUpperCase().includes('ZEBRA'));
+      let dataLines;
+
+      if (zebraIndex !== -1) {
+        dataLines = lines.slice(zebraIndex + 1);
+      } else {
+        dataLines = lines;
+      }
+
+      dataLines = dataLines.filter(
+        l => l.replace(/\s+/g, '').toUpperCase() !== 'ZEBRA'
+      );
+
+      const rows = [];
+      for (const line of dataLines) {
+        const parts = line.split(/\s+/);
+        if (parts.length < 2) continue;
+        rows.push(parseZebraLine(line));
+      }
+
+      return rows;
+    }
+
+    // List 1: {name (surname), address, floor, note}
+    function parseZebraLine(line) {
+      const tokens = line.trim().split(/\s+/);
+      if (!tokens.length) {
+        return { name: '', address: '', floor: '', note: '' };
+      }
+
+      const surname = tokens[0];
+
+      let numIdx = -1;
+      for (let i = 1; i < tokens.length; i++) {
+        if (/^\d+[A-Za-zÁČĎÉĚÍŇÓŘŠŤÚŮÝŽa-záčďéěíňóřšťúůýž]*$/.test(tokens[i])) {
+          numIdx = i;
+          break;
+        }
+      }
+
+      if (numIdx === -1) {
+        return {
+          name: surname,
+          address: '',
+          floor: '',
+          note: tokens.slice(1).join(' ')
+        };
+      }
+
+      const addressTokens = tokens.slice(1, numIdx + 1);
+      const address = addressTokens.join(' ');
+
+      const floor = tokens[numIdx + 1] || '';
+      const noteTokens = tokens.slice(numIdx + 2);
+      const note = noteTokens.join(' ');
+
+      return { name: surname, address, floor, note };
+    }
+
+    // ---------- PARSE LIST 2: FIND NEW SURNAME+ADDRESS COMBOS ----------
+
+    function getNewRowsFromList2(text, existingKeySet) {
+      const lines = text
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length);
+
+      const startIndex = lines.findIndex(l => l.startsWith('Strávník'));
+      if (startIndex === -1) {
+        return [];
+      }
+
+      const rows = [];
+
+      for (let i = startIndex + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.includes(' ')) break;
+
+        const tokens = line.split(/\s+/);
+        // 0: surname, 1: firstname, 2: osobní, 3: chod, 4: počet, 5: skupina, 6+: address
+        if (tokens.length < 7) break;
+
+        const surname = tokens[0];
+
+        // strip tokens with parentheses from address (e.g. "(1)Zelená")
+        const rawAddressTokens = tokens.slice(6);
+        const addressTokens = rawAddressTokens.filter(t => !/[()]/.test(t));
+        const addressFull = addressTokens.join(' ');
+        const addressStart = extractAddressStart(addressFull);
+
+        const key = makeKey(surname, addressStart);
+        if (!existingKeySet.has(key)) {
+          existingKeySet.add(key);
+          rows.push({
+            name: surname,
+            address: addressStart
+          });
+        }
+      }
+
+      return rows;
+    }
+
+    // ---------- DOM & STATE ----------
+
+    const list1Input = document.getElementById('list1');
+    const list2Input = document.getElementById('list2');
+    const list1Btn = document.getElementById('list1Btn');
+    const list2Btn = document.getElementById('list2Btn');
+    const mergeBtn = document.getElementById('mergeBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const addedNamesBox = document.getElementById('addedNamesBox');
+
+    let addedRows = []; // {name, address}
+
+    list1Btn.addEventListener('click', () => list1Input.click());
+    list2Btn.addEventListener('click', () => list2Input.click());
+
+    list1Input.addEventListener('change', () => {
+      list1Btn.textContent = list1Input.files?.[0]?.name || "Vybrat PDF 1";
+    });
+    list2Input.addEventListener('change', () => {
+      list2Btn.textContent = list2Input.files?.[0]?.name || "Vybrat PDF 2";
+    });
+
+    // ---------- MERGE ----------
+
+    mergeBtn.addEventListener('click', async () => {
+      const file1 = list1Input.files[0];
+      const file2 = list2Input.files[0];
+      if (!file1 || !file2) {
+        alert("Nejprve prosím vyberte 2 PDF soubory!");
+        return;
+      }
+
+      try {
+        const [t1, t2] = await Promise.all([
+          extractTextFromPDF(file1),
+          extractTextFromPDF(file2)
+        ]);
+
+        const zebraRows = parseZebraTable(t1);
+
+        const existingKeys = new Set(
+          zebraRows.map(r => makeKey(r.name, r.address))
+        );
+
+        addedRows = getNewRowsFromList2(t2, existingKeys);
+
+        if (addedRows.length) {
+          addedNamesBox.style.display = 'block';
+
+          let html = '<table>';
+          html += '<caption>Nalezeny nové položky v PDF 2</caption>';
+          html += '<thead><tr><th>Příjmení</th><th>Adresa</th></tr></thead><tbody>';
+
+          for (const row of addedRows) {
+            html += `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.address)}</td></tr>`;
+          }
+
+          html += '</tbody></table>';
+          addedNamesBox.innerHTML = html;
+        } else {
+          addedNamesBox.style.display = 'block';
+          addedNamesBox.innerHTML =
+            '<strong>Nebyly nalezeny žádné nové položky.</strong>';
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Chyba při čtení PDF.");
+        addedRows = [];
+        addedNamesBox.style.display = 'none';
+        addedNamesBox.innerHTML = '';
+      }
+    });
+
+    // ---------- RESET ----------
+
+    resetBtn.addEventListener('click', () => {
+      list1Input.value = "";
+      list2Input.value = "";
+      list1Btn.textContent = "Vybrat PDF 1";
+      list2Btn.textContent = "Vybrat PDF 2";
+      addedRows = [];
+      addedNamesBox.style.display = 'none';
+      addedNamesBox.innerHTML = '';
+    });
+  </script>
+</body>
+</html>

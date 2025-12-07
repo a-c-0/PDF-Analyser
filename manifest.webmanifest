@@ -1,0 +1,23 @@
+{
+  "name": "Petr's App",
+  "short_name": "Analyser",
+  "id": "/PDF-Analyser/",
+  "start_url": "/PDF-Analyser/",
+  "scope": "/PDF-Analyser/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "description": "App for analysing and comparing two PDFs.",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
